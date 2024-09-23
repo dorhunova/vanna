@@ -49,6 +49,7 @@ flowchart
 """
 
 import json
+import logging
 import os
 import re
 import sqlite3
@@ -68,6 +69,12 @@ from ..exceptions import DependencyError, ImproperlyConfigured, ValidationError
 from ..types import TrainingPlan, TrainingPlanItem
 from ..utils import validate_config_path
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 class VannaBase(ABC):
     def __init__(self, config=None):
@@ -142,7 +149,6 @@ class VannaBase(ABC):
 
             if allow_llm_to_see_data:
                 intermediate_sql = self.extract_sql(llm_response)
-
                 try:
                     self.log(title="Running Intermediate SQL", message=intermediate_sql)
                     df = self.run_sql(intermediate_sql)
@@ -160,6 +166,10 @@ class VannaBase(ABC):
                     self.log(title="LLM Response", message=llm_response)
                 except Exception as e:
                     return f"Error running intermediate SQL: {e}"
+                    return f"Error running intermediate SQL: {e}"
+
+
+                    return f"Error running intermediate SQL: {e}"                
 
 
         return self.extract_sql(llm_response)
@@ -713,28 +723,66 @@ class VannaBase(ABC):
         return plotly_code
 
     def generate_plotly_code(
-        self, question: str = None, sql: str = None, df_metadata: str = None, **kwargs
-    ) -> str:
+        self, question: str = None, sql: str = None, df_metadata: str = None, df_subset: str = None, **kwargs
+    ) -> dict:
+    
         if question is not None:
-            system_msg = f"The following is a pandas DataFrame that contains the results of the query that answers the question the user asked: '{question}'"
+            system_msg = f"The following is a pandas DataFrame that contains the results of the query that answers the question the user asked: '{question}'."
         else:
-            system_msg = "The following is a pandas DataFrame "
+            system_msg = "The following is a pandas DataFrame."
 
         if sql is not None:
             system_msg += f"\n\nThe DataFrame was produced using this query: {sql}\n\n"
 
-        system_msg += f"The following is information about the resulting pandas DataFrame 'df': \n{df_metadata}"
+        system_msg += f"\n\nThe following is information about the resulting pandas DataFrame 'df': \n{df_metadata}"
 
+        pre_prompt = (
+            "Based on the question provided and the data gathered, give the best instruction for visualizing the results. Consider the following when designing the visualization:\n"
+            "- Analyze the data types (categorical, numerical, time series) and recommend the most suitable plot type (e.g., bar chart, line chart, scatter plot, etc.).\n"
+            "- Specify what should be represented on the x-axis and y-axis to effectively communicate insights from the data.\n"
+            "- Ensure the visualization helps answer the question by highlighting the most important patterns or relationships within the data.\n"
+            "- Provide recommendations for customization (gridlines, axis labels, titles, legends, or annotations) to improve clarity and readability of the visualization.\n"
+            "- If the data involves time series, ensure the x-axis is labeled appropriately with dates, and choose a chart type that reflects trends over time (e.g., line charts).\n"
+            "- Avoid using pie charts unless the data explicitly represents proportions or percentages.\n"
+            "- Ensure the final visualization is clear, informative, and avoids redundancy.\n\n"
+            f"Question:\n{question}\n\n"
+            f"Data structure:\n{df_metadata}\n\n"
+            f"Subset of the data:\n{df_subset}\n\n"
+            "Respond with a clear instruction for generating a meaningful visualization of the data, without including the Python code for the plot at this stage."
+            "If you assume that no meaningful visualization can be generated, please return 'No plot' as the response with no further instructions."
+        )
+        
         message_log = [
             self.system_message(system_msg),
-            self.user_message(
-                "Can you generate the Python plotly code to chart the results of the dataframe? Assume the data is in a pandas dataframe called 'df'. If there is only one value in the dataframe, use an Indicator. Respond with only Python code. Do not answer with any explanations -- just the code."
-            ),
+            self.user_message(pre_prompt), 
         ]
+        
+        pre_prompt_response = self.submit_prompt(message_log, kwargs=kwargs)
+        logging.log(logging.INFO, f"Pre-Prompt Request: {pre_prompt}")
+        logging.log(logging.INFO, f"Pre-Prompt Response: {pre_prompt_response}")
+        
+        if pre_prompt_response == "No plot":
+            return None 
 
-        plotly_code = self.submit_prompt(message_log, kwargs=kwargs)
+        plotly_prompt = (
+            f"Based on the following instructions for plot generation, generate the Python code to create a meaningful Plotly plot:\n\n"
+            f"Instructions: {pre_prompt_response}\n\n"
+            f"The dataframe is called 'df', and it contains the following structure:\n\n{df_metadata}\n\n"
+            f"The subset of the data in the dataframe:\n\n{df_subset}\n\n"
+            "Respond only with the Python code for the plot generation, make sure it's one plot that is getting generated, do not add any explanations or commentary. Do not include sample data in the code."
+            "Do not include any import statements in the code, return only the plotly code."
+        )
 
-        return self._sanitize_plotly_code(self._extract_python_code(plotly_code))
+        message_log.append(self.user_message(plotly_prompt))
+        
+        plotly_code_response = self.submit_prompt(message_log, kwargs=kwargs)
+        
+        logging.log(logging.INFO, f"Plotly Code Request: {plotly_prompt}")
+        logging.log(logging.INFO, f"Plotly Code Response: {plotly_code_response}")
+        
+        return self._sanitize_plotly_code(self._extract_python_code(plotly_code_response))
+
+
 
     # ----------------- Connect to Any Database to run the Generated SQL ----------------- #
 
@@ -867,7 +915,6 @@ class VannaBase(ABC):
         port: int = None,
         **kwargs
     ):
-
         """
         Connect to postgres using the psycopg2 connector. This is just a helper function to set [`vn.run_sql`][vanna.base.base.VannaBase.run_sql]
         **Example:**
@@ -949,7 +996,6 @@ class VannaBase(ABC):
         def run_sql_postgres(sql: str) -> Union[pd.DataFrame, None]:
             conn = None
             try:
-                conn = connect_to_db()  # Initial connection attempt
                 cs = conn.cursor()
                 cs.execute(sql)
                 results = cs.fetchall()
@@ -1427,132 +1473,6 @@ class VannaBase(ABC):
         self.dialect = "T-SQL / Microsoft SQL Server"
         self.run_sql = run_sql_mssql
         self.run_sql_is_set = True
-    def connect_to_presto(
-        self,
-        host: str,
-        catalog: str = 'hive',
-        schema: str = 'default',
-        user: str = None,
-        password: str = None,
-        port: int = None,
-        combined_pem_path: str = None,
-        protocol: str = 'https',
-        requests_kwargs: dict = None,
-        **kwargs
-    ):
-      """
-        Connect to a Presto database using the specified parameters.
-
-        Args:
-            host (str): The host address of the Presto database.
-            catalog (str): The catalog to use in the Presto environment.
-            schema (str): The schema to use in the Presto environment.
-            user (str): The username for authentication.
-            password (str): The password for authentication.
-            port (int): The port number for the Presto connection.
-            combined_pem_path (str): The path to the combined pem file for SSL connection.
-            protocol (str): The protocol to use for the connection (default is 'https').
-            requests_kwargs (dict): Additional keyword arguments for requests.
-
-        Raises:
-            DependencyError: If required dependencies are not installed.
-            ImproperlyConfigured: If essential configuration settings are missing.
-
-        Returns:
-            None
-      """
-      try:
-        from pyhive import presto
-      except ImportError:
-        raise DependencyError(
-          "You need to install required dependencies to execute this method,"
-          " run command: \npip install pyhive"
-        )
-
-      if not host:
-        host = os.getenv("PRESTO_HOST")
-
-      if not host:
-        raise ImproperlyConfigured("Please set your presto host")
-
-      if not catalog:
-        catalog = os.getenv("PRESTO_CATALOG")
-
-      if not catalog:
-        raise ImproperlyConfigured("Please set your presto catalog")
-
-      if not user:
-        user = os.getenv("PRESTO_USER")
-
-      if not user:
-        raise ImproperlyConfigured("Please set your presto user")
-
-      if not password:
-        password = os.getenv("PRESTO_PASSWORD")
-
-      if not port:
-        port = os.getenv("PRESTO_PORT")
-
-      if not port:
-        raise ImproperlyConfigured("Please set your presto port")
-
-      conn = None
-
-      try:
-        if requests_kwargs is None and combined_pem_path is not None:
-          # use the combined pem file to verify the SSL connection
-          requests_kwargs = {
-            'verify': combined_pem_path,  # 使用转换后得到的 PEM 文件进行 SSL 验证
-          }
-        conn = presto.Connection(host=host,
-                                 username=user,
-                                 password=password,
-                                 catalog=catalog,
-                                 schema=schema,
-                                 port=port,
-                                 protocol=protocol,
-                                 requests_kwargs=requests_kwargs,
-                                 **kwargs)
-      except presto.Error as e:
-        raise ValidationError(e)
-
-      def run_sql_presto(sql: str) -> Union[pd.DataFrame, None]:
-        if conn:
-          try:
-            sql = sql.rstrip()
-            # fix for a known problem with presto db where an extra ; will cause an error.
-            if sql.endswith(';'):
-                sql = sql[:-1]
-            cs = conn.cursor()
-            cs.execute(sql)
-            results = cs.fetchall()
-
-            # Create a pandas dataframe from the results
-            df = pd.DataFrame(
-              results, columns=[desc[0] for desc in cs.description]
-            )
-            return df
-
-          except presto.Error as e:
-            print(e)
-            raise ValidationError(e)
-
-          except Exception as e:
-            print(e)
-            raise e
-
-      self.run_sql_is_set = True
-      self.run_sql = run_sql_presto
-
-    def connect_to_hive(
-        self,
-        host: str = None,
-        dbname: str = 'default',
-        user: str = None,
-        password: str = None,
-        port: int = None,
-        auth: str = 'CUSTOM',
-        **kwargs
     ):
       """
         Connect to a Hive database. This is just a helper function to set [`vn.run_sql`][vanna.base.base.VannaBase.run_sql]

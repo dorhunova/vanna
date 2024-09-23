@@ -5,7 +5,6 @@ import sys
 import uuid
 from abc import ABC, abstractmethod
 from functools import wraps
-import importlib.metadata
 
 import flask
 import requests
@@ -17,6 +16,12 @@ from ..base import VannaBase
 from .assets import css_content, html_content, js_content
 from .auth import AuthInterface, NoAuth
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 class Cache(ABC):
     """
@@ -90,7 +95,10 @@ class MemoryCache(Cache):
     def delete(self, id):
         if id in self.cache:
             del self.cache[id]
-
+    
+    def clean(self):
+        self.cache = {}
+        
 
 class VannaFlaskAPI:
     flask_app = None
@@ -354,30 +362,6 @@ class VannaFlaskAPI:
                     }
                 )
 
-        @self.flask_app.route("/api/v0/generate_rewritten_question", methods=["GET"])
-        @self.requires_auth
-        def generate_rewritten_question(user: any):
-            """
-            Generate a rewritten question
-            ---
-            parameters:
-              - name: last_question
-                in: query
-                type: string
-                required: true
-              - name: new_question
-                in: query
-                type: string
-                required: true
-            """
-
-            last_question = flask.request.args.get("last_question")
-            new_question = flask.request.args.get("new_question")
-
-            rewritten_question = self.vn.generate_rewritten_question(last_question, new_question)
-
-            return jsonify({"type": "rewritten_question", "question": rewritten_question})
-
         @self.flask_app.route("/api/v0/get_function", methods=["GET"])
         @self.requires_auth
         def get_function(user: any):
@@ -509,7 +493,7 @@ class VannaFlaskAPI:
                 df = vn.run_sql(sql=sql)
 
                 self.cache.set(id=id, field="df", value=df)
-
+                logging.info(f"Should generate chart: self.chart: {self.chart}, vn.should_generate_chart(df): {vn.should_generate_chart(df)}")
                 return jsonify(
                     {
                         "type": "df",
@@ -674,25 +658,36 @@ class VannaFlaskAPI:
                     fig:
                       type: object
             """
+            self.cache.clean()
             chart_instructions = flask.request.args.get('chart_instructions')
 
             try:
                 # If chart_instructions is not set then attempt to retrieve the code from the cache
                 if chart_instructions is None or len(chart_instructions) == 0:
-                    code = self.cache.get(id=id, field="plotly_code")
+                    # code = self.cache.get(id=id, field="plotly_code")
+                    code = vn.generate_plotly_code(
+                        question=question,
+                        sql=sql,
+                        df_metadata=f"Running df.dtypes gives:\n {df.dtypes}",
+                        df_subset=f"Running df.head(10) gives:\n {df.head(10)}",
+                    )
+                    # self.cache.set(id=id, field="plotly_code", value=code)
                 else:
                     question = f"{question}. When generating the chart, use these special instructions: {chart_instructions}"
                     code = vn.generate_plotly_code(
                         question=question,
                         sql=sql,
                         df_metadata=f"Running df.dtypes gives:\n {df.dtypes}",
+                        df_subset=f"Running df.head(10) gives:\n {df.head(10)}",
                     )
-                    self.cache.set(id=id, field="plotly_code", value=code)
-
+                    # self.cache.set(id=id, field="plotly_code", value=code)
+                    
+                logging.info(f"Plotly code in generate plotly figure fn: {code}")
+                
                 fig = vn.get_plotly_figure(plotly_code=code, df=df, dark_mode=False)
                 fig_json = fig.to_json()
 
-                self.cache.set(id=id, field="fig_json", value=fig_json)
+                # self.cache.set(id=id, field="fig_json", value=fig_json)
 
                 return jsonify(
                     {
