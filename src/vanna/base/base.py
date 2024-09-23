@@ -993,6 +993,7 @@ class VannaBase(ABC):
         def run_sql_postgres(sql: str) -> Union[pd.DataFrame, None]:
             conn = None
             try:
+                conn = connect_to_db()  # Initial connection attempt
                 cs = conn.cursor()
                 cs.execute(sql)
                 results = cs.fetchall()
