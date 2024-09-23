@@ -365,8 +365,10 @@ class VannaBase(ABC):
                 self._response_language()
             ),
         ]
+        logging.info(f"Summary prompt: {message_log}")
 
         summary = self.submit_prompt(message_log, **kwargs)
+        logging.info(f"Summary: {summary}")
 
         return summary
 
