@@ -149,6 +149,7 @@ class VannaBase(ABC):
 
             if allow_llm_to_see_data:
                 intermediate_sql = self.extract_sql(llm_response)
+
                 try:
                     self.log(title="Running Intermediate SQL", message=intermediate_sql)
                     df = self.run_sql(intermediate_sql)
@@ -166,10 +167,6 @@ class VannaBase(ABC):
                     self.log(title="LLM Response", message=llm_response)
                 except Exception as e:
                     return f"Error running intermediate SQL: {e}"
-                    return f"Error running intermediate SQL: {e}"
-
-
-                    return f"Error running intermediate SQL: {e}"                
 
 
         return self.extract_sql(llm_response)
