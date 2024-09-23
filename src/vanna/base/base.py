@@ -362,7 +362,7 @@ class VannaBase(ABC):
             ),
             self.user_message(
                 # "Briefly summarize the data based on the question that was asked. Do not respond with any additional explanation beyond the summary." +
-                "Provide a concise summary of the data based on the given question. Ensure the response is well-formatted, using appropriate line breaks and indentation for clarity. Do not include any additional explanation beyond the summary."
+                "Provide a concise summary of the data based on the given question. Ensure the response is well-formatted, using appropriate line breaks and indentation for clarity. Do not include any additional explanation beyond the summary." + 
                 self._response_language()
             ),
         ]
