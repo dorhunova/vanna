@@ -2,11 +2,11 @@ html_content = '''<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcResTh7_pMjo6mc9tEkIyYUioOFzbMxHpBzhQ&s" />
+    <link rel="icon" type="image/png" href="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQV2FAehk3wWvSqa2nRfcjhpMkObVg1u5-6Tw&s" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@350&display=swap" rel="stylesheet">
     <script src="https://cdn.plot.ly/plotly-latest.min.js" type="text/javascript"></script>
-    <title>First Student</title>
+    <title>Reporting Assistant</title>
     <script type="module" crossorigin src="/assets/index-2dc047a4.js"></script>
     <link rel="stylesheet" href="/assets/index-a3ae634d.css">
   </head>
