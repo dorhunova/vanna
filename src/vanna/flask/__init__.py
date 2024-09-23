@@ -659,7 +659,7 @@ class VannaFlaskAPI:
                     fig:
                       type: object
             """
-            self.cache.clean()
+            # self.cache.clean()
             chart_instructions = flask.request.args.get('chart_instructions')
 
             try:
