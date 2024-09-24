@@ -2137,7 +2137,7 @@ class VannaBase(ABC):
                     question=question,
                     df_metadata=f"Running df.dtypes gives:\n {df.dtypes}",
                     df_subset=f"Running df.head(10) gives:\n {df.head(10)}",
-                    error_prompt=f"Here is the history of the errors that were encountered:\n" + "\n".join(errors),
+                    error_prompt=None if len(errors) == 0 else f"Here is the history of the errors that were encountered:\n" + "\n".join(errors),
                     plotly_code=plotly_code,
                 )
                 try:
