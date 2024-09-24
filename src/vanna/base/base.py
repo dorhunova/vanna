@@ -759,8 +759,9 @@ class VannaBase(ABC):
             self.user_message(pre_prompt), 
         ]
         
-        pre_prompt_response = self.submit_prompt(message_log, kwargs=kwargs)
         logging.log(logging.INFO, f"Pre-Prompt Request: {pre_prompt}")
+        
+        pre_prompt_response = self.submit_prompt(message_log, kwargs=kwargs)
         logging.log(logging.INFO, f"Pre-Prompt Response: {pre_prompt_response}")
         
         if pre_prompt_response == "No plot":
@@ -769,12 +770,14 @@ class VannaBase(ABC):
         plotly_prompt = (
             f"Based on the following instructions for plot generation, generate the Python code to create a meaningful Plotly plot:\n\n"
             f"Instructions: {pre_prompt_response}\n\n"
-            f"Question and error description if there was an error with the previous plotly code: {question}\n\n"
             f"The dataframe is called 'df', and it contains the following structure:\n\n{df_metadata}\n\n"
             f"The subset of the data in the dataframe:\n\n{df_subset}\n\n"
             "Respond only with the Python code for the plot generation, make sure it's one plot that is getting generated, do not add any explanations or commentary. Do not include sample data in the code."
             "Do not include any import statements in the code, return only the plotly code."
-        )
+        )        
+        
+        if error is not None:
+            plotly_prompt += f"\n\n Make sure to generate the code following the instructions and fixing the error in the previous code, the error that was thrown was: {error}"
 
         message_log.append(self.user_message(plotly_prompt))
         
