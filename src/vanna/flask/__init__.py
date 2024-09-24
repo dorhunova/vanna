@@ -362,6 +362,30 @@ class VannaFlaskAPI:
                         "text": sql,
                     }
                 )
+                
+        @self.flask_app.route("/api/v0/generate_rewritten_question", methods=["GET"])
+        @self.requires_auth
+        def generate_rewritten_question(user: any):
+            """
+            Generate a rewritten question
+            ---
+            parameters:
+              - name: last_question
+                in: query
+                type: string
+                required: true
+              - name: new_question
+                in: query
+                type: string
+                required: true
+            """
+
+            last_question = flask.request.args.get("last_question")
+            new_question = flask.request.args.get("new_question")
+
+            rewritten_question = self.vn.generate_rewritten_question(last_question, new_question)
+
+            return jsonify({"type": "rewritten_question", "question": rewritten_question})
 
         @self.flask_app.route("/api/v0/get_function", methods=["GET"])
         @self.requires_auth
