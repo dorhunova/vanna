@@ -696,7 +696,7 @@ class VannaFlaskAPI:
                         df_metadata=f"Running df.dtypes gives:\n {df.dtypes}",
                         df_subset=f"Running df.head(10) gives:\n {df.head(10)}",
                     )
-                    # self.cache.set(id=id, field="plotly_code", value=code)
+                    self.cache.set(id=id, field="plotly_code", value=code)
                 else:
                     question = f"{question}. When generating the chart, use these special instructions: {chart_instructions}"
                     code = vn.generate_plotly_code(
@@ -705,14 +705,14 @@ class VannaFlaskAPI:
                         df_metadata=f"Running df.dtypes gives:\n {df.dtypes}",
                         df_subset=f"Running df.head(10) gives:\n {df.head(10)}",
                     )
-                    # self.cache.set(id=id, field="plotly_code", value=code)
+                    self.cache.set(id=id, field="plotly_code", value=code)
                     
                 logging.info(f"Plotly code in generate plotly figure fn: {code}")
                 
                 fig = vn.get_plotly_figure(plotly_code=code, df=df, dark_mode=False)
                 fig_json = fig.to_json()
 
-                # self.cache.set(id=id, field="fig_json", value=fig_json)
+                self.cache.set(id=id, field="fig_json", value=fig_json)
 
                 return jsonify(
                     {
