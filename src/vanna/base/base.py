@@ -617,8 +617,8 @@ class VannaBase(ABC):
         )
 
         message_log = [self.system_message(initial_prompt)]
-
         for example in question_sql_list:
+            logging.info(f"Example: {example}")
             if example is None:
                 print("example is None")
             else:
@@ -722,7 +722,7 @@ class VannaBase(ABC):
         return plotly_code
 
     def generate_plotly_code(
-        self, question: str = None, sql: str = None, df_metadata: str = None, df_subset: str = None, **kwargs
+        self, question: str = None, sql: str = None, df_metadata: str = None, df_subset: str = None, error: str = None, plotly_code: str = None, **kwargs
     ) -> dict:
     
         if question is not None:
@@ -751,6 +751,9 @@ class VannaBase(ABC):
             "If you assume that no meaningful visualization can be generated, please return 'No plot' as the response with no further instructions."
         )
         
+        if error is not None:
+            pre_prompt += f"\n\nPreviously generated plotly code was not executable, here is the code that was attempted: {plotly_code}, here is the error that was thrown: {error}\n\n, make sure to include instructions on how to fix the code if there was an error."        
+        
         message_log = [
             self.system_message(system_msg),
             self.user_message(pre_prompt), 
@@ -766,6 +769,7 @@ class VannaBase(ABC):
         plotly_prompt = (
             f"Based on the following instructions for plot generation, generate the Python code to create a meaningful Plotly plot:\n\n"
             f"Instructions: {pre_prompt_response}\n\n"
+            f"Question and error description if there was an error with the previous plotly code: {question}\n\n"
             f"The dataframe is called 'df', and it contains the following structure:\n\n{df_metadata}\n\n"
             f"The subset of the data in the dataframe:\n\n{df_subset}\n\n"
             "Respond only with the Python code for the plot generation, make sure it's one plot that is getting generated, do not add any explanations or commentary. Do not include sample data in the code."
@@ -1860,6 +1864,7 @@ class VannaBase(ABC):
             if question is None:
                 question = self.generate_question(sql)
                 print("Question generated with sql:", question, "\nAdding SQL...")
+            print("Adding SQL...: ", question, sql)
             return self.add_question_sql(question=question, sql=sql)
 
         if ddl:
@@ -2090,7 +2095,7 @@ class VannaBase(ABC):
         return plan
 
     def get_plotly_figure(
-        self, plotly_code: str, df: pd.DataFrame, question: str = None, sql: str = None, dark_mode: bool = True
+        self, plotly_code: str, df: pd.DataFrame, question: str = None, dark_mode: bool = True
     ) -> Tuple[plotly.graph_objs.Figure, str]:
         """
         **Example:**
@@ -2111,28 +2116,36 @@ class VannaBase(ABC):
             tuple: A tuple containing the Plotly figure and the Plotly code. If the code was updated, the updated code is returned.
         """
         ldict = {"df": df, "px": px, "go": go}
+        attempts = 0  # Initialize attempts outside the try-except
+        e = None  # Initialize 'e' outside to ensure it has a value
+
         try:
             exec(plotly_code, globals(), ldict)
             fig = ldict.get("fig", None)
-        except Exception as e:
-            attempts = 0
+        except Exception as initial_error:  # Use a more descriptive name for clarity
+            e = initial_error  # Assign the exception to 'e'
+            print(f"Attempt {attempts} - Error generating plotly figure: ", e)
             while attempts < 3:
                 attempts += 1
                 # Re-run generate_plotly_code with instruction that the code is not runnable
                 plotly_code = self.generate_plotly_code(
-                    question=f"{question}. The previous plotly code was not runnable. Here is the code that was attempted: {plotly_code}, please fix the code and return a new plotly code that can be run to generate the chart.",
-                    sql=sql,
+                    question=question,
                     df_metadata=f"Running df.dtypes gives:\n {df.dtypes}",
                     df_subset=f"Running df.head(10) gives:\n {df.head(10)}",
+                    error=str(e),
+                    plotly_code=plotly_code,
                 )
                 try:
                     exec(plotly_code, globals(), ldict)
                     fig = ldict.get("fig", None)
                     if fig is not None:
                         break
-                except Exception as e:
+                except Exception as subsequent_error:
+                    e = subsequent_error  # Update 'e' with the latest exception
                     print(f"Attempt {attempts} - Error generating plotly figure: ", e)
                     fig = None
+
+
 
         if fig is None:
             return None, None

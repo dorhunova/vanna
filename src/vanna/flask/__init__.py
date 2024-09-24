@@ -704,7 +704,7 @@ class VannaFlaskAPI:
                     
                 logging.info(f"Plotly code in generate plotly figure fn: {code}")
                 
-                fig, code = vn.get_plotly_figure(plotly_code=code, df=df, dark_mode=False)
+                fig, code = vn.get_plotly_figure(plotly_code=code, df=df, question=question, dark_mode=False)
                 self.cache.set(id=id, field="plotly_code", value=code)
                 fig_json = fig.to_json()
 
