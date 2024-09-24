@@ -722,7 +722,7 @@ class VannaBase(ABC):
         return plotly_code
 
     def generate_plotly_code(
-        self, question: str = None, sql: str = None, df_metadata: str = None, df_subset: str = None, error: str = None, plotly_code: str = None, **kwargs
+        self, question: str = None, sql: str = None, df_metadata: str = None, df_subset: str = None, error_prompt: str = None, plotly_code: str = None, **kwargs
     ) -> dict:
     
         if question is not None:
@@ -751,8 +751,8 @@ class VannaBase(ABC):
             "If you assume that no meaningful visualization can be generated, please return 'No plot' as the response with no further instructions."
         )
         
-        if error is not None:
-            pre_prompt += f"\n\nPreviously generated plotly code was not executable, here is the code that was attempted: {plotly_code}, here is the error that was thrown: {error}\n\n, make sure to include instructions on how to fix the code if there was an error."        
+        if error_prompt is not None:
+            pre_prompt += f"\n\nPreviously generated plotly code (or codes) was not executable, here is the code that was attempted to execute the last time: {plotly_code}, here is the error history that was thrown: {error_prompt}\n\n, make sure to include instructions on how to fix the code and avoid all of the previous errors."        
         
         message_log = [
             self.system_message(system_msg),
@@ -776,8 +776,8 @@ class VannaBase(ABC):
             "Do not include any import statements in the code, return only the plotly code."
         )        
         
-        if error is not None:
-            plotly_prompt += f"\n\n Make sure to generate the code following the instructions and fixing the error in the previous code, the error that was thrown was: {error}"
+        if error_prompt is not None:
+            plotly_prompt += f"\n\n Make sure to generate the code following the instructions and fixing the error in the previous code, the error (or errors) that were thrown were: {error_prompt}"
 
         message_log.append(self.user_message(plotly_prompt))
         
@@ -2121,21 +2121,25 @@ class VannaBase(ABC):
         ldict = {"df": df, "px": px, "go": go}
         attempts = 0  # Initialize attempts outside the try-except
         e = None  # Initialize 'e' outside to ensure it has a value
+        errors = []
 
         try:
             exec(plotly_code, globals(), ldict)
             fig = ldict.get("fig", None)
-        except Exception as initial_error:  # Use a more descriptive name for clarity
-            e = initial_error  # Assign the exception to 'e'
+        except Exception as initial_error:  
+            e = initial_error  
+            errors.append(str(e))
             print(f"Attempt {attempts} - Error generating plotly figure: ", e)
+
             while attempts < 3:
                 attempts += 1
-                # Re-run generate_plotly_code with instruction that the code is not runnable
                 plotly_code = self.generate_plotly_code(
                     question=question,
                     df_metadata=f"Running df.dtypes gives:\n {df.dtypes}",
                     df_subset=f"Running df.head(10) gives:\n {df.head(10)}",
-                    error=str(e),
+                    error_prompt="""
+                    Here are history of the errors that were encountered:\n" + "\n".join(errors)
+                    """,
                     plotly_code=plotly_code,
                 )
                 try:
@@ -2144,7 +2148,7 @@ class VannaBase(ABC):
                     if fig is not None:
                         break
                 except Exception as subsequent_error:
-                    e = subsequent_error  # Update 'e' with the latest exception
+                    e = subsequent_error
                     print(f"Attempt {attempts} - Error generating plotly figure: ", e)
                     fig = None
 
