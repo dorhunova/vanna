@@ -1788,7 +1788,7 @@ class VannaBase(ABC):
                         sql=sql,
                         df_metadata=f"Running df.dtypes gives:\n {df.dtypes}",
                     )
-                    fig = self.get_plotly_figure(plotly_code=plotly_code, df=df)
+                    fig, plotly_code = self.get_plotly_figure(plotly_code=plotly_code, df=df, question=question, sql=sql)
                     if print_results:
                         try:
                             display = __import__(
@@ -2090,56 +2090,54 @@ class VannaBase(ABC):
         return plan
 
     def get_plotly_figure(
-        self, plotly_code: str, df: pd.DataFrame, dark_mode: bool = True
-    ) -> plotly.graph_objs.Figure:
+        self, plotly_code: str, df: pd.DataFrame, question: str = None, sql: str = None, dark_mode: bool = True
+    ) -> Tuple[plotly.graph_objs.Figure, str]:
         """
         **Example:**
         ```python
-        fig = vn.get_plotly_figure(
+        fig, updated_plotly_code = vn.get_plotly_figure(
             plotly_code="fig = px.bar(df, x='name', y='salary')",
             df=df
         )
         fig.show()
         ```
-        Get a Plotly figure from a dataframe and Plotly code.
+        Get a Plotly figure from a dataframe and Plotly code. If the provided Plotly code is not runnable, it will attempt to generate a new one.
 
         Args:
             df (pd.DataFrame): The dataframe to use.
             plotly_code (str): The Plotly code to use.
 
         Returns:
-            plotly.graph_objs.Figure: The Plotly figure.
+            tuple: A tuple containing the Plotly figure and the Plotly code. If the code was updated, the updated code is returned.
         """
         ldict = {"df": df, "px": px, "go": go}
         try:
             exec(plotly_code, globals(), ldict)
-
             fig = ldict.get("fig", None)
         except Exception as e:
-            # Inspect data types
-            numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
-            categorical_cols = df.select_dtypes(
-                include=["object", "category"]
-            ).columns.tolist()
-
-            # Decision-making for plot type
-            if len(numeric_cols) >= 2:
-                # Use the first two numeric columns for a scatter plot
-                fig = px.scatter(df, x=numeric_cols[0], y=numeric_cols[1])
-            elif len(numeric_cols) == 1 and len(categorical_cols) >= 1:
-                # Use a bar plot if there's one numeric and one categorical column
-                fig = px.bar(df, x=categorical_cols[0], y=numeric_cols[0])
-            elif len(categorical_cols) >= 1 and df[categorical_cols[0]].nunique() < 10:
-                # Use a pie chart for categorical data with fewer unique values
-                fig = px.pie(df, names=categorical_cols[0])
-            else:
-                # Default to a simple line plot if above conditions are not met
-                fig = px.line(df)
+            attempts = 0
+            while attempts < 3:
+                attempts += 1
+                # Re-run generate_plotly_code with instruction that the code is not runnable
+                plotly_code = self.generate_plotly_code(
+                    question=f"{question}. The previous plotly code was not runnable. Here is the code that was attempted: {plotly_code}, please fix the code and return a new plotly code that can be run to generate the chart.",
+                    sql=sql,
+                    df_metadata=f"Running df.dtypes gives:\n {df.dtypes}",
+                    df_subset=f"Running df.head(10) gives:\n {df.head(10)}",
+                )
+                try:
+                    exec(plotly_code, globals(), ldict)
+                    fig = ldict.get("fig", None)
+                    if fig is not None:
+                        break
+                except Exception as e:
+                    print(f"Attempt {attempts} - Error generating plotly figure: ", e)
+                    fig = None
 
         if fig is None:
-            return None
+            return None, None
 
         if dark_mode:
             fig.update_layout(template="plotly_dark")
 
-        return fig
+        return fig, plotly_code

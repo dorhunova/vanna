@@ -518,6 +518,10 @@ class VannaFlaskAPI:
                 df = vn.run_sql(sql=sql)
 
                 self.cache.set(id=id, field="df", value=df)
+                
+                logging.info(f"df: {df}")
+                logging.info(f"Cache: {self.cache.get(id=id, field='df')}")
+                
                 logging.info(f"Should generate chart: self.chart: {self.chart}, vn.should_generate_chart(df): {vn.should_generate_chart(df)}")
                 return jsonify(
                     {
@@ -683,33 +687,25 @@ class VannaFlaskAPI:
                     fig:
                       type: object
             """
-            # self.cache.clean()
             chart_instructions = flask.request.args.get('chart_instructions')
 
             try:
                 # If chart_instructions is not set then attempt to retrieve the code from the cache
-                if chart_instructions is None or len(chart_instructions) == 0:
-                    # code = self.cache.get(id=id, field="plotly_code")
-                    code = vn.generate_plotly_code(
-                        question=question,
-                        sql=sql,
-                        df_metadata=f"Running df.dtypes gives:\n {df.dtypes}",
-                        df_subset=f"Running df.head(10) gives:\n {df.head(10)}",
-                    )
-                    self.cache.set(id=id, field="plotly_code", value=code)
-                else:
+                if chart_instructions is not None:
                     question = f"{question}. When generating the chart, use these special instructions: {chart_instructions}"
-                    code = vn.generate_plotly_code(
-                        question=question,
-                        sql=sql,
-                        df_metadata=f"Running df.dtypes gives:\n {df.dtypes}",
-                        df_subset=f"Running df.head(10) gives:\n {df.head(10)}",
-                    )
-                    self.cache.set(id=id, field="plotly_code", value=code)
+                
+                code = vn.generate_plotly_code(
+                    question=question,
+                    sql=sql,
+                    df_metadata=f"Running df.dtypes gives:\n {df.dtypes}",
+                    df_subset=f"Running df.head(10) gives:\n {df.head(10)}",
+                )
+                self.cache.set(id=id, field="plotly_code", value=code)
                     
                 logging.info(f"Plotly code in generate plotly figure fn: {code}")
                 
-                fig = vn.get_plotly_figure(plotly_code=code, df=df, dark_mode=False)
+                fig, code = vn.get_plotly_figure(plotly_code=code, df=df, dark_mode=False)
+                self.cache.set(id=id, field="plotly_code", value=code)
                 fig_json = fig.to_json()
 
                 self.cache.set(id=id, field="fig_json", value=fig_json)
@@ -726,6 +722,7 @@ class VannaFlaskAPI:
                 import traceback
 
                 traceback.print_exc()
+                logging.info(f"Error in generate_plotly_figure: {e}")
 
                 return jsonify({"type": "error", "error": str(e)})
 
@@ -1034,6 +1031,8 @@ class VannaFlaskAPI:
                     text:
                       type: string
             """
+            logging.info(f"df: {df}")
+            logging.info(f"question: {question}")
             if self.allow_llm_to_see_data:
                 summary = vn.generate_summary(question=question, df=df)
 
