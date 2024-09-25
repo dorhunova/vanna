@@ -722,7 +722,7 @@ class VannaBase(ABC):
         return plotly_code
 
     def generate_plotly_code(
-        self, question: str = None, sql: str = None, df_metadata: str = None, df_subset: str = None, error_prompt: str = None, plotly_code: str = None, **kwargs
+        self, question: str = None, sql: str = None, df_metadata: str = None, df_subset: str = None, errors: str = None, plotly_code: str = None, **kwargs
     ) -> dict:
     
         if question is not None:
@@ -751,8 +751,8 @@ class VannaBase(ABC):
             "If you assume that no meaningful visualization can be generated, please return 'No plot' as the response with no further instructions."
         )
         
-        if error_prompt is not None:
-            pre_prompt += f"\n\nPreviously generated plotly code (or codes) was not executable, here is the code that was attempted to execute the last time: {plotly_code}, here is the error history that was thrown: {error_prompt}\n\n, make sure to include instructions on how to fix the code and avoid all of the previous errors."        
+        if errors is not None:
+            pre_prompt += f"\n\nPreviously generated plotly code (or codes) was not executable, here is the code that was attempted to execute the last time: {plotly_code}, here is the error history that was thrown: {errors}, make sure to include instructions on how to fix the code and avoid all of the previous errors."        
         
         message_log = [
             self.system_message(system_msg),
@@ -773,11 +773,12 @@ class VannaBase(ABC):
             f"The dataframe is called 'df', and it contains the following structure:\n\n{df_metadata}\n\n"
             f"The subset of the data in the dataframe:\n\n{df_subset}\n\n"
             "Respond only with the Python code for the plot generation, make sure it's one plot that is getting generated, do not add any explanations or commentary. Do not include sample data in the code."
-            "Do not include any import statements in the code, return only the plotly code."
+            "Make sure to include all of the required imports for the plot generation, if needed, include the import statements at the top of the code."
+            "Make sure the code is executable, and free of syntax errors and unknown variables."
         )        
         
-        if error_prompt is not None:
-            plotly_prompt += f"\n\n Make sure to generate the code following the instructions and fixing the error in the previous code, the error (or errors) that were thrown were: {error_prompt}"
+        if errors is not None:
+            plotly_prompt += f"\n\n Make sure to generate the code following the instructions and fixing the error in the previous code, the errors that were thrown were: {errors}"
 
         message_log.append(self.user_message(plotly_prompt))
         
@@ -2137,7 +2138,7 @@ class VannaBase(ABC):
                     question=question,
                     df_metadata=f"Running df.dtypes gives:\n {df.dtypes}",
                     df_subset=f"Running df.head(10) gives:\n {df.head(10)}",
-                    error_prompt=None if len(errors) == 0 else f"Here is the history of the errors that were encountered:\n" + "\n".join(errors),
+                    error_prompt=None if len(errors) == 0 else f"\n" + "\n".join([f"{i+1}. {error}" for i, error in enumerate(errors)])
                     plotly_code=plotly_code,
                 )
                 try:
