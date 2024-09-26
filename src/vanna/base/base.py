@@ -355,10 +355,17 @@ class VannaBase(ABC):
         Returns:
             str: The summary of the results of the SQL query.
         """
+        max_rows = 1000
+        sampled = False 
+        if len(df) > max_rows:
+            df = df.sample(max_rows, random_state=1)
+            sampled = True
 
         message_log = [
             self.system_message(
-                f"You are a helpful data assistant. The user asked the question: '{question}'\n\nThe following is a pandas DataFrame with the results of the query: \n{df.to_markdown()}\n\n"
+                f"You are a helpful data assistant. The user asked the question: '{question}'\n\n"
+                f"The following is a pandas DataFrame with the results of the query: \n{df.to_markdown()}\n\n"
+                f"{'Note: The above data is a sampled subset of the actual data (300 rows), due to the large size of the dataset. Please mention this to the user in the summary.' if sampled else ''}"
             ),
             self.user_message(
                 "Provide a concise summary of the data based on the given question. Ensure the response is well-formatted, using appropriate line breaks and indentation for clarity. Do not include any additional explanation beyond the summary." + 
