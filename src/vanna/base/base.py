@@ -1489,6 +1489,35 @@ class VannaBase(ABC):
         self.run_sql = run_sql_mssql
         self.run_sql_is_set = True
         
+    def connect_to_mssql_identity(self, db_name: str, host: str):
+        import struct
+        import pyodbc
+        from azure import identity
+        
+        def get_db_connection():
+
+            connection_string = "Driver={ODBC Driver 18 for SQL Server};Server=tcp:cat2mgd-pr-glb-euw-ssr-001.database.windows.net,1433;Database=cat2mgd-pr-glb-euw-sdb-001_Copy;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30"
+
+            credential = identity.DefaultAzureCredential(exclude_interactive_browser_credential=False)
+            token_bytes = credential.get_token("https://database.windows.net/.default").token.encode("UTF-16-LE")
+
+            token_struct = struct.pack(f'<I{len(token_bytes)}s', len(token_bytes), token_bytes)
+            SQL_COPT_SS_ACCESS_TOKEN = 1256  # This connection option is defined by microsoft in msodbcsql.h
+            conn = pyodbc.connect(connection_string, attrs_before={SQL_COPT_SS_ACCESS_TOKEN: token_struct})
+
+            print("Connection to Azure SQL established")
+            return conn
+        
+        def run_sql(sql: str):
+            conn = get_db_connection()
+            df = pd.read_sql_query(sql, conn)
+            conn.close()
+            return df
+        
+        self.dialect = "T-SQL / Microsoft SQL Server"
+        self.run_sql = run_sql
+        self.run_sql_is_set = True
+        
     def connect_to_presto(
         self,
         host: str,
