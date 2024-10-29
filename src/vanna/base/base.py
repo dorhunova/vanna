@@ -2174,7 +2174,7 @@ class VannaBase(ABC):
                     question=question,
                     df_metadata=f"Running df.dtypes gives:\n {df.dtypes}",
                     df_subset=f"Running df.head(10) gives:\n {df.head(10)}",
-                    error_prompt=None if len(errors) == 0 else f"\n" + "\n".join([f"{i+1}. {error}" for i, error in enumerate(errors)])
+                    error_prompt=None if len(errors) == 0 else f"\n" + "\n".join([f"{i+1}. {error}" for i, error in enumerate(errors)]),
                     plotly_code=plotly_code,
                 )
                 try:
