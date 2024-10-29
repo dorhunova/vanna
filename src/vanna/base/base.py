@@ -1498,7 +1498,8 @@ class VannaBase(ABC):
 
             connection_string = "Driver={ODBC Driver 18 for SQL Server};Server=tcp:cat2mgd-pr-glb-euw-ssr-001.database.windows.net,1433;Database=cat2mgd-pr-glb-euw-sdb-001_Copy;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30"
 
-            credential = identity.DefaultAzureCredential(exclude_interactive_browser_credential=False)
+            # credential = identity.DefaultAzureCredential(exclude_interactive_browser_credential=False)
+            credential = identity.InteractiveBrowserCredential()
             token_bytes = credential.get_token("https://database.windows.net/.default").token.encode("UTF-16-LE")
 
             token_struct = struct.pack(f'<I{len(token_bytes)}s', len(token_bytes), token_bytes)
